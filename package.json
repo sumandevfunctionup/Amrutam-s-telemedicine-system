@@ -1,0 +1,45 @@
+{
+  "name": "amrutam-telemedicine-system",
+  "version": "1.0.0",
+  "description": "Amrutam Telemedicine System Backend API",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "migrate": "knex migrate:latest --knexfile db/db.js",
+    "migrate:rollback": "knex migrate:rollback --knexfile db/db.js",
+    "migrate:make": "knex migrate:make --knexfile db/db.js",
+    "seed": "knex seed:run --knexfile db/db.js",
+    "seed:make": "knex seed:make --knexfile db/db.js"
+  },
+  "keywords": [
+    "express",
+    "knex",
+    "postgresql",
+    "swagger",
+    "telemedicine",
+    "amrutam"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "knex": "^3.1.0",
+    "morgan": "^1.10.0",
+    "pg": "^8.13.1",
+    "qrcode": "^1.5.4",
+    "speakeasy": "^2.0.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
