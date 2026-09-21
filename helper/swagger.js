@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-let appVersion = '2.1.0';
+let appVersion = '2.1.1';
 try {
   const packageJson = JSON.parse(
     fs.readFileSync(path.resolve(__dirname, '../package.json'), 'utf8')

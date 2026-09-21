@@ -86,7 +86,7 @@ app.get('/', (req, res) => {
   res.json({
     name: "Amrutam Telemedicine System API",
     status: 'online',
-    version: '2.0.0',
+    version: swaggerSpec.info?.version || '2.1.0',
     documentation: '/api-docs',
     health: '/api/v1/health',
     dbTest: '/api/v1/db-test',

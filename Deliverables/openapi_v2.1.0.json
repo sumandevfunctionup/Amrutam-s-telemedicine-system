@@ -1,0 +1,2161 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Amrutam Telemedicine System API",
+    "version": "2.1.0",
+    "description": "RESTful API documentation for Amrutam Telemedicine System, built with Express.js, Knex, and PostgreSQL.",
+    "contact": {
+      "name": "Amrutam Engineering Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local Development Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter JWT bearer token for authorization."
+      }
+    }
+  },
+  "paths": {
+    "/api/v1/search/doctors": {
+      "get": {
+        "summary": "Search and filter Ayurvedic doctors with sub-200ms latency SLA",
+        "description": "High-performance doctor search engine with composite filtering, next-available-slot calculation, and Redis caching.",
+        "tags": [
+          "Search & Discovery"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Keyword search matching doctor's name, specialization, or bio"
+          },
+          {
+            "in": "query",
+            "name": "specialization",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Ayurvedic specialization (e.g. Kayachikitsa, Panchakarma, Shalya Tantra)"
+          },
+          {
+            "in": "query",
+            "name": "minFee",
+            "schema": {
+              "type": "number"
+            },
+            "description": "Minimum consultation fee in INR"
+          },
+          {
+            "in": "query",
+            "name": "maxFee",
+            "schema": {
+              "type": "number"
+            },
+            "description": "Maximum consultation fee in INR"
+          },
+          {
+            "in": "query",
+            "name": "minExperience",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Minimum years of clinical experience"
+          },
+          {
+            "in": "query",
+            "name": "minRating",
+            "schema": {
+              "type": "number"
+            },
+            "description": "Minimum star rating (e.g. 4.5)"
+          },
+          {
+            "in": "query",
+            "name": "gender",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "male",
+                "female",
+                "other"
+              ]
+            },
+            "description": "Doctor gender"
+          },
+          {
+            "in": "query",
+            "name": "availableDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Filter doctors who have available slots on this date (YYYY-MM-DD)"
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "rating",
+                "fee_asc",
+                "fee_desc",
+                "experience",
+                "name"
+              ],
+              "default": "rating"
+            },
+            "description": "Sorting order"
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results with pagination and next available slots"
+          },
+          "400": {
+            "description": "Invalid query parameters"
+          }
+        }
+      }
+    },
+    "/api/v1/search/specializations": {
+      "get": {
+        "summary": "List all active Ayurvedic categories with doctor counts and fee stats",
+        "description": "Aggregated clinical specialties with average fees, fee ranges, and ratings cached in Redis.",
+        "tags": [
+          "Search & Discovery"
+        ],
+        "responses": {
+          "200": {
+            "description": "Specializations aggregated successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/prescriptions/{id}": {
+      "get": {
+        "summary": "Retrieve a digital prescription by prescription ID",
+        "tags": [
+          "Prescriptions & EHR"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Digital prescription retrieved successfully"
+          },
+          "403": {
+            "description": "Forbidden - unauthorized access to medical records"
+          },
+          "404": {
+            "description": "Prescription not found"
+          }
+        }
+      }
+    },
+    "/api/v1/prescriptions/patient/{patientId}": {
+      "get": {
+        "summary": "Retrieve longitudinal electronic health records (EHR) for a patient",
+        "tags": [
+          "Prescriptions & EHR"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "patientId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Patient prescription history returned"
+          },
+          "403": {
+            "description": "Forbidden - unauthorized access to other patients' records"
+          }
+        }
+      }
+    },
+    "/api/v1/payments/initiate": {
+      "post": {
+        "summary": "Initiate checkout order / payment intent for a consultation",
+        "tags": [
+          "Payments & Saga Ledger"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "consultation_id"
+                ],
+                "properties": {
+                  "consultation_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "payment_method": {
+                    "type": "string",
+                    "enum": [
+                      "upi",
+                      "card",
+                      "netbanking",
+                      "wallet"
+                    ],
+                    "default": "upi"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Payment order created with transaction ID"
+          },
+          "404": {
+            "description": "Consultation not found"
+          },
+          "409": {
+            "description": "Consultation already paid"
+          }
+        }
+      }
+    },
+    "/api/v1/payments/webhook": {
+      "post": {
+        "summary": "Payment gateway webhook handler (Idempotent + Saga automated compensation)",
+        "tags": [
+          "Payments & Saga Ledger"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "event",
+                  "transaction_id"
+                ],
+                "properties": {
+                  "event": {
+                    "type": "string",
+                    "enum": [
+                      "payment.success",
+                      "payment.failed"
+                    ],
+                    "example": "payment.success"
+                  },
+                  "transaction_id": {
+                    "type": "string",
+                    "example": "ORDER-1726748493-29481"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processed idempotently"
+          },
+          "404": {
+            "description": "Payment transaction not found"
+          }
+        }
+      }
+    },
+    "/api/v1/payments/{id}/refund": {
+      "post": {
+        "summary": "Process refund for a completed payment and release booked slot",
+        "tags": [
+          "Payments & Saga Ledger"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "example": "Consultation cancelled by patient"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Payment refunded successfully and slot schedule restored"
+          },
+          "403": {
+            "description": "Forbidden - unauthorized to refund"
+          },
+          "404": {
+            "description": "Payment not found"
+          },
+          "409": {
+            "description": "Payment not in completed status"
+          }
+        }
+      }
+    },
+    "/api/v1/payments/my-payments": {
+      "get": {
+        "summary": "List payment transaction ledger for the authenticated user",
+        "tags": [
+          "Payments & Saga Ledger"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "completed",
+                "failed",
+                "refunded"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payment ledger entries retrieved successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/payments/{id}": {
+      "get": {
+        "summary": "Get payment details by payment ID",
+        "tags": [
+          "Payments & Saga Ledger"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Payment details retrieved"
+          },
+          "403": {
+            "description": "Forbidden - unauthorized access"
+          },
+          "404": {
+            "description": "Payment record not found"
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "summary": "System health check",
+        "description": "Returns the health status of the application server and connected PostgreSQL database.",
+        "tags": [
+          "System"
+        ],
+        "responses": {
+          "200": {
+            "description": "System is healthy"
+          },
+          "503": {
+            "description": "System is unhealthy"
+          }
+        }
+      }
+    },
+    "/api/v1/db-test": {
+      "get": {
+        "summary": "PostgreSQL database connection test",
+        "description": "Tests the live connection to PostgreSQL and returns database version, timestamp, and database name.",
+        "tags": [
+          "System"
+        ],
+        "responses": {
+          "200": {
+            "description": "Database is connected and healthy"
+          },
+          "500": {
+            "description": "Database connection failed"
+          }
+        }
+      }
+    },
+    "/api/v1/doctors": {
+      "get": {
+        "summary": "List verified doctors with filtering and pagination",
+        "tags": [
+          "Doctors"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "specialization",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by Ayurvedic specialization (e.g. Kayachikitsa)"
+          },
+          {
+            "in": "query",
+            "name": "minExperience",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Minimum years of experience"
+          },
+          {
+            "in": "query",
+            "name": "maxFee",
+            "schema": {
+              "type": "number"
+            },
+            "description": "Maximum consultation fee"
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of doctors returned successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/doctors/profile": {
+      "put": {
+        "summary": "Update doctor's own profile (bio, fee, specialization, experience)",
+        "tags": [
+          "Doctors"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "specialization": {
+                    "type": "string",
+                    "example": "Kayachikitsa (Internal Medicine)"
+                  },
+                  "experience_years": {
+                    "type": "integer",
+                    "example": 12
+                  },
+                  "consultation_fee": {
+                    "type": "number",
+                    "example": 850
+                  },
+                  "bio": {
+                    "type": "string",
+                    "example": "Senior Ayurvedic physician specializing in chronic lifestyle disorders."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Doctor profile updated successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - only doctors can update doctor profiles"
+          }
+        }
+      }
+    },
+    "/api/v1/doctors/slots": {
+      "post": {
+        "summary": "Batch create calendar availability slots",
+        "tags": [
+          "Doctor Availability"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Optional idempotency key for safe retries"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "slots"
+                ],
+                "properties": {
+                  "slots": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "start_time",
+                        "end_time"
+                      ],
+                      "properties": {
+                        "start_time": {
+                          "type": "string",
+                          "example": "2026-09-25T09:00:00.000Z"
+                        },
+                        "end_time": {
+                          "type": "string",
+                          "example": "2026-09-25T09:30:00.000Z"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Availability slots created successfully"
+          },
+          "400": {
+            "description": "Invalid slot timestamps or internal overlaps"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - only doctors can create slots"
+          },
+          "409": {
+            "description": "Overlapping slot already exists in schedule"
+          }
+        }
+      }
+    },
+    "/api/v1/doctors/slots/{slotId}": {
+      "delete": {
+        "summary": "Cancel an available calendar slot",
+        "tags": [
+          "Doctor Availability"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slotId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Availability slot cancelled successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden - doctor can only cancel their own slots"
+          },
+          "404": {
+            "description": "Slot not found"
+          },
+          "409": {
+            "description": "Cannot cancel a locked or booked slot"
+          }
+        }
+      }
+    },
+    "/api/v1/doctors/{doctorId}/slots": {
+      "get": {
+        "summary": "Query public availability slots for a doctor",
+        "tags": [
+          "Doctor Availability"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "doctorId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "startDate",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter slots starting from this date/time"
+          },
+          {
+            "in": "query",
+            "name": "endDate",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter slots ending before this date/time"
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "available",
+                "locked",
+                "booked",
+                "cancelled"
+              ],
+              "default": "available"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Availability slots returned"
+          },
+          "404": {
+            "description": "Doctor not found"
+          }
+        }
+      }
+    },
+    "/api/v1/doctors/{id}": {
+      "get": {
+        "summary": "Get public doctor profile by ID",
+        "tags": [
+          "Doctors"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Doctor profile returned"
+          },
+          "404": {
+            "description": "Doctor not found"
+          }
+        }
+      }
+    },
+    "/api/v1/consultations": {
+      "get": {
+        "summary": "List consultations scoped by caller role (patient sees theirs, doctor sees their schedule)",
+        "tags": [
+          "Consultation Lifecycle"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "scheduled",
+                "in_progress",
+                "completed",
+                "cancelled",
+                "no_show"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "type",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "video",
+                "audio",
+                "chat"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "startDate",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "endDate",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of consultations returned successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/consultations/{id}": {
+      "get": {
+        "summary": "Retrieve consultation details and virtual meeting credentials",
+        "tags": [
+          "Consultation Lifecycle"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consultation details returned"
+          },
+          "403": {
+            "description": "Forbidden - unauthorized to view this consultation"
+          },
+          "404": {
+            "description": "Consultation not found"
+          }
+        }
+      }
+    },
+    "/api/v1/consultations/{id}/start": {
+      "patch": {
+        "summary": "Doctor starts consultation session (scheduled -> in_progress)",
+        "tags": [
+          "Consultation Lifecycle"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Consultation started and room active"
+          },
+          "403": {
+            "description": "Forbidden - only assigned doctor can start"
+          },
+          "409": {
+            "description": "State conflict - status is not scheduled"
+          }
+        }
+      }
+    },
+    "/api/v1/consultations/{id}/complete": {
+      "patch": {
+        "summary": "Doctor marks consultation completed and saves final SOAP notes",
+        "tags": [
+          "Consultation Lifecycle"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "type": "string"
+                  },
+                  "soap": {
+                    "type": "object",
+                    "properties": {
+                      "subjective": {
+                        "type": "string"
+                      },
+                      "objective": {
+                        "type": "string"
+                      },
+                      "assessment": {
+                        "type": "string"
+                      },
+                      "plan": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Consultation completed successfully"
+          },
+          "403": {
+            "description": "Forbidden - only assigned doctor can complete"
+          },
+          "409": {
+            "description": "State conflict"
+          }
+        }
+      }
+    },
+    "/api/v1/consultations/{id}/notes": {
+      "patch": {
+        "summary": "Doctor records or updates Ayurvedic clinical SOAP notes",
+        "tags": [
+          "Consultation Lifecycle"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "subjective": {
+                    "type": "string",
+                    "example": "Patient reports chronic insomnia and digestive burning."
+                  },
+                  "objective": {
+                    "type": "string",
+                    "example": "Pitta pulse elevated, mild Ama coating on tongue."
+                  },
+                  "assessment": {
+                    "type": "string",
+                    "example": "Tikshnagni with Pitta-Vata vitiation."
+                  },
+                  "plan": {
+                    "type": "string",
+                    "example": "Prescribe cooling herbs (Brahmi, Shatavari), ghee regimen."
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Clinical notes updated successfully"
+          },
+          "403": {
+            "description": "Forbidden - only assigned doctor can update notes"
+          }
+        }
+      }
+    },
+    "/api/v1/consultations/{id}/cancel": {
+      "patch": {
+        "summary": "Cancel consultation session and release calendar slot",
+        "tags": [
+          "Consultation Lifecycle"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "example": "Patient requested cancellation due to travel"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Consultation cancelled and slot released"
+          },
+          "403": {
+            "description": "Forbidden - unauthorized to cancel"
+          },
+          "409": {
+            "description": "Conflict - consultation already completed or cancelled"
+          }
+        }
+      }
+    },
+    "/api/v1/consultations/{id}/prescription": {
+      "post": {
+        "summary": "Doctor issues and digitally signs an immutable Ayurvedic prescription",
+        "tags": [
+          "Prescriptions & EHR"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "diagnosis",
+                  "medications"
+                ],
+                "properties": {
+                  "diagnosis": {
+                    "type": "string",
+                    "example": "Amlapitta with Pitta-Kapha aggravation"
+                  },
+                  "medications": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "name",
+                        "dosage",
+                        "frequency",
+                        "timing",
+                        "duration_days"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "example": "Avipattikar Churna"
+                        },
+                        "dosage": {
+                          "type": "string",
+                          "example": "1 tsp"
+                        },
+                        "frequency": {
+                          "type": "string",
+                          "example": "twice daily"
+                        },
+                        "timing": {
+                          "type": "string",
+                          "example": "before meals with warm water"
+                        },
+                        "duration_days": {
+                          "type": "integer",
+                          "example": 30
+                        }
+                      }
+                    }
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "example": "Avoid fermented, overly spicy, and deep-fried foods. Drink coconut water daily."
+                  },
+                  "follow_up_date": {
+                    "type": "string",
+                    "example": "2026-10-20"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Prescription issued and signed successfully"
+          },
+          "403": {
+            "description": "Forbidden - only assigned doctor can issue prescription"
+          },
+          "409": {
+            "description": "Conflict - prescription already issued or consultation cancelled"
+          }
+        }
+      },
+      "get": {
+        "summary": "Retrieve digital prescription for a consultation",
+        "tags": [
+          "Prescriptions & EHR"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Prescription retrieved successfully"
+          },
+          "403": {
+            "description": "Forbidden - unauthorized access"
+          },
+          "404": {
+            "description": "Prescription not found"
+          }
+        }
+      }
+    },
+    "/api/v1/bookings/lock": {
+      "post": {
+        "summary": "Reserve/lock an available slot for checkout (High-concurrency safe)",
+        "tags": [
+          "Bookings & Scheduling"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Safe retry token"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "slot_id"
+                ],
+                "properties": {
+                  "slot_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "example": "8688b2ae-feeb-4c14-b275-ab324082451e"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Slot locked for 10 minutes"
+          },
+          "400": {
+            "description": "Invalid input or slot in the past"
+          },
+          "404": {
+            "description": "Slot not found"
+          },
+          "409": {
+            "description": "Slot is no longer available (already locked or booked)"
+          }
+        }
+      }
+    },
+    "/api/v1/bookings/confirm": {
+      "post": {
+        "summary": "Confirm consultation booking for a locked or available slot",
+        "tags": [
+          "Bookings & Scheduling"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "slot_id"
+                ],
+                "properties": {
+                  "slot_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "video",
+                      "audio",
+                      "chat"
+                    ],
+                    "default": "video"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "example": "Experiencing Vata imbalance symptoms, digestive stiffness."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Booking confirmed and consultation scheduled"
+          },
+          "404": {
+            "description": "Slot not found"
+          },
+          "409": {
+            "description": "Slot is already booked or conflict occurred"
+          }
+        }
+      }
+    },
+    "/api/v1/bookings/cancel": {
+      "post": {
+        "summary": "Cancel a booked consultation or release a slot reservation",
+        "tags": [
+          "Bookings & Scheduling"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "slot_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "consultation_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "example": "Schedule conflict"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Booking cancelled or slot released successfully"
+          },
+          "403": {
+            "description": "Forbidden - not authorized to cancel this booking"
+          },
+          "404": {
+            "description": "Slot or consultation not found"
+          },
+          "409": {
+            "description": "Cannot cancel completed or already cancelled consultation"
+          }
+        }
+      }
+    },
+    "/api/v1/bookings/my-bookings": {
+      "get": {
+        "summary": "Retrieve bookings & scheduled consultations for the logged-in user",
+        "tags": [
+          "Bookings & Scheduling"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "scheduled",
+                "in_progress",
+                "completed",
+                "cancelled",
+                "no_show"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User bookings retrieved successfully"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "summary": "Register a new patient or doctor",
+        "tags": [
+          "Authentication"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password",
+                  "first_name",
+                  "last_name"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "example": "rohan@example.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "Password@123"
+                  },
+                  "first_name": {
+                    "type": "string",
+                    "example": "Rohan"
+                  },
+                  "last_name": {
+                    "type": "string",
+                    "example": "Verma"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "patient",
+                      "doctor"
+                    ],
+                    "default": "patient"
+                  },
+                  "phone_number": {
+                    "type": "string",
+                    "example": "+919876543210"
+                  },
+                  "specialization": {
+                    "type": "string",
+                    "example": "Kayachikitsa (Internal Medicine)"
+                  },
+                  "license_number": {
+                    "type": "string",
+                    "example": "AYU-DEL-99999"
+                  },
+                  "consultation_fee": {
+                    "type": "number",
+                    "example": 750
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "409": {
+            "description": "Email or license already exists"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "summary": "Log in with email and password",
+        "tags": [
+          "Authentication"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "example": "admin@amrutam.co.in"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "Password@123"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful (returns tokens or triggers MFA challenge)"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Invalid credentials"
+          },
+          "429": {
+            "description": "Too many requests"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login/mfa": {
+      "post": {
+        "summary": "Verify 6-digit TOTP MFA code during login",
+        "tags": [
+          "Authentication"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tempToken",
+                  "code"
+                ],
+                "properties": {
+                  "tempToken": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string",
+                    "example": "123456"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "MFA verified and tokens returned"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Invalid MFA code or token"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "summary": "Refresh access token",
+        "tags": [
+          "Authentication"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "refreshToken"
+                ],
+                "properties": {
+                  "refreshToken": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "New tokens issued"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Invalid or expired refresh token"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/setup": {
+      "post": {
+        "summary": "Generate MFA secret and QR code for authenticator apps",
+        "tags": [
+          "Multi-Factor Authentication"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "QR code and secret generated"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/confirm": {
+      "post": {
+        "summary": "Confirm 6-digit TOTP code and activate MFA on account",
+        "tags": [
+          "Multi-Factor Authentication"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "code"
+                ],
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "example": "123456"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "MFA activated"
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "summary": "Fetch current authenticated user profile",
+        "tags": [
+          "User Profile"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current user profile"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/profile": {
+      "put": {
+        "summary": "Update profile details",
+        "tags": [
+          "User Profile"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "first_name": {
+                    "type": "string"
+                  },
+                  "last_name": {
+                    "type": "string"
+                  },
+                  "gender": {
+                    "type": "string",
+                    "enum": [
+                      "male",
+                      "female",
+                      "other"
+                    ]
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profile updated successfully"
+          },
+          "400": {
+            "description": "Validation error"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "summary": "Logout user and invalidate access token in Redis blacklist",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Logged out successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/audit-logs": {
+      "get": {
+        "summary": "Browse and filter non-repudiation audit trails (Admin only)",
+        "description": "Retrieve audit logs with multi-dimensional filtering by action, entity_type, user_id, and UTC date ranges.",
+        "tags": [
+          "Compliance & Audit Trails"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "action",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Action name (e.g. BOOKING_CONFIRMED, SLOT_LOCKED, PAYMENT_COMPLETED)"
+          },
+          {
+            "in": "query",
+            "name": "entity_type",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Entity type (consultations, availability_slots, payments, prescriptions, doctors, users)"
+          },
+          {
+            "in": "query",
+            "name": "entity_id",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Specific entity ID or UUID"
+          },
+          {
+            "in": "query",
+            "name": "user_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Filter events by actor UUID"
+          },
+          {
+            "in": "query",
+            "name": "startDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Start date in YYYY-MM-DD format (UTC)"
+          },
+          {
+            "in": "query",
+            "name": "endDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "End date in YYYY-MM-DD format (UTC)"
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit logs retrieved successfully"
+          },
+          "401": {
+            "description": "Unauthorized (Token missing or invalid)"
+          },
+          "403": {
+            "description": "Forbidden (Non-admin access attempt)"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/audit-logs/summary": {
+      "get": {
+        "summary": "Compliance metrics & security telemetry summary (Admin only)",
+        "description": "Aggregated audit counts, action distributions, 24-hour activity volume, and top active actors.",
+        "tags": [
+          "Compliance & Audit Trails"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit summary metrics retrieved successfully"
+          },
+          "403": {
+            "description": "Forbidden (Non-admin access)"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/audit-logs/{id}": {
+      "get": {
+        "summary": "Fetch single audit log entry by UUID (Admin only)",
+        "description": "Retrieve detailed non-repudiation record including full JSONB diff details, IP, User-Agent, and actor context.",
+        "tags": [
+          "Compliance & Audit Trails"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Audit log entry UUID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit log entry details"
+          },
+          "403": {
+            "description": "Forbidden (Non-admin access)"
+          },
+          "404": {
+            "description": "Audit log entry not found"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/analytics/overview": {
+      "get": {
+        "summary": "Executive KPI Overview Dashboard (Admin only)",
+        "description": "High-level platform KPIs including daily consultation volume progress towards the 100k daily capacity goal, active user counts, and gross/net revenue. Cached in Redis.",
+        "tags": [
+          "Admin Analytics & Intelligence"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Executive dashboard KPIs"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden (Admin only)"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/analytics/consultations": {
+      "get": {
+        "summary": "Consultation Volume Timeseries Breakdown (Admin only)",
+        "description": "Historical trend analysis of consultations grouped by day, week, or month with status distribution.",
+        "tags": [
+          "Admin Analytics & Intelligence"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "startDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Start date (YYYY-MM-DD)"
+          },
+          {
+            "in": "query",
+            "name": "endDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "End date (YYYY-MM-DD)"
+          },
+          {
+            "in": "query",
+            "name": "groupBy",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "default": "day"
+            },
+            "description": "Time bucket grouping"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Timeseries data"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/analytics/revenue": {
+      "get": {
+        "summary": "Financial & Revenue Performance Intelligence (Admin only)",
+        "description": "Financial performance metrics grouped by Ayurvedic clinical specialization and payment method.",
+        "tags": [
+          "Admin Analytics & Intelligence"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "startDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "endDate",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Revenue performance metrics"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/analytics/doctors": {
+      "get": {
+        "summary": "Doctor Utilization & Capacity Intelligence (Admin only)",
+        "description": "Platform calendar slot utilization percentages and rankings of top Ayurvedic physicians by completed consultations.",
+        "tags": [
+          "Admin Analytics & Intelligence"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Doctor utilization and performance rankings"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        }
+      }
+    }
+  },
+  "tags": []
+}

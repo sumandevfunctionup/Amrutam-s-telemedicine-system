@@ -78,16 +78,6 @@ Amrutam-s-telemedicine-system/
 │   ├── test_module9.js        # Module 9: Executive analytics & timeseries verification
 │   ├── test_module10.js       # Module 10: Observability, Prometheus, Docker & CI/CD
 │   └── test_rate_limit_and_async.js # Resilience: Rate limiting, exponential retry & jobs
-├── Deliverables/              # Formal PRD deliverables documentation suite
-│   ├── README.md              # Master compliance & deliverables index
-│   ├── 01_CODE_AND_INFRASTRUCTURE.md # Deliverable 1: Code & Infra overview
-│   ├── 02_README_AND_SETUP.md # Deliverable 2: Setup & Installation
-│   ├── 03_OPENAPI_SPECIFICATION.md # Deliverable 3: OpenAPI 3.0 catalog
-│   ├── 04_ARCHITECTURE_DOCUMENT.md # Deliverable 4: 2–4 page architecture doc
-│   ├── 05_TESTS_AND_CI_PIPELINE.md # Deliverable 5: Tests & CI/CD pipeline
-│   ├── 06_OBSERVABILITY_SETUP.md # Deliverable 6: Metrics, tracing & health probes
-│   ├── 07_SECURITY_CHECKLIST_AND_THREAT_MODEL.md # Deliverable 7: OWASP & Threat Model
-│   └── openapi_v2.1.0.json    # Standalone raw OpenAPI 3.0 JSON schema
 ├── .github/workflows/ci.yml   # GitHub Actions CI/CD matrix pipeline
 ├── ARCHITECTURE.md            # Master 2–4 page architecture & scalability document
 ├── BLUEPRINT.md               # Master engineering blueprint & PRD matrix
@@ -106,7 +96,6 @@ Amrutam-s-telemedicine-system/
 ---
 
 ## 📌 Evaluator Quick Reference & Guides
-- 📁 **[PRD Deliverables Directory](file:///home/suman/Desktop/workplace/amrutum/Amrutam-s-telemedicine-system/Deliverables/README.md)**: Master index mapping all 7 required PRD deliverables.
 - 📖 **[Modules & Complete API Evaluation Guide](file:///home/suman/Desktop/workplace/amrutum/Amrutam-s-telemedicine-system/MODULES_AND_APIS_GUIDE.md)**: Deep dive into all 10 modules, endpoints, request/response bodies, business logic, and security rules.
 - 🐳 **[Docker Deployment & Operations Guide](file:///home/suman/Desktop/workplace/amrutum/Amrutam-s-telemedicine-system/DOCKER_GUIDE.md)**: Step-by-step walkthrough to build, configure `.env`, and launch using Docker and Docker Compose.
 - 📐 **[Master Architecture Document](file:///home/suman/Desktop/workplace/amrutum/Amrutam-s-telemedicine-system/ARCHITECTURE.md)**: Concurrency models, two-tier distributed mutex, database ERD, and threat models.
