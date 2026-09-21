@@ -8,8 +8,10 @@ import {
   refreshToken,
   getMe,
   updateProfile,
+  logout,
 } from '../controller/authController.js';
 import { authenticate, idempotency } from '../auth/middleware.js';
+import { rateLimiter } from '../auth/rateLimiter.js';
 import { validate } from '../helper/validator.js';
 import {
   registerSchema,
@@ -77,7 +79,7 @@ const router = Router();
  *       409:
  *         description: Email or license already exists
  */
-router.post('/register', idempotency, validate(registerSchema), register);
+router.post('/register', rateLimiter({ max: 10, windowSeconds: 60, keyPrefix: 'auth-register' }), idempotency, validate(registerSchema), register);
 
 /**
  * @openapi
@@ -109,8 +111,10 @@ router.post('/register', idempotency, validate(registerSchema), register);
  *         description: Validation error
  *       401:
  *         description: Invalid credentials
+ *       429:
+ *         description: Too many requests
  */
-router.post('/login', validate(loginSchema), login);
+router.post('/login', rateLimiter({ max: 60, windowSeconds: 60, keyPrefix: 'auth-login' }), validate(loginSchema), login);
 
 /**
  * @openapi
@@ -269,5 +273,22 @@ router.get('/me', authenticate, getMe);
  *         description: Validation error
  */
 router.put('/profile', authenticate, idempotency, validate(updateProfileSchema), updateProfile);
+
+/**
+ * @openapi
+ * /api/v1/auth/logout:
+ *   post:
+ *     summary: Logout user and invalidate access token in Redis blacklist
+ *     tags:
+ *       - Authentication
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *       401:
+ *         description: Unauthorized
+ */
+router.post('/logout', authenticate, logout);
 
 export default router;

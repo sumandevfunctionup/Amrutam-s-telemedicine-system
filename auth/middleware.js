@@ -1,6 +1,7 @@
 import { db } from '../db/db.js';
 import { verifyAccessToken } from '../helper/jwt.js';
-import { unauthorized, forbidden, notFound, serverError } from '../helper/apiResponse.js';
+import { errorResponse, unauthorized, forbidden, notFound, serverError } from '../helper/apiResponse.js';
+import { isJwtRevoked, cacheGet, cacheSet } from '../helper/redis.js';
 
 /**
  * Authentication middleware: verifies JWT access token and attaches active user to req.user
@@ -18,13 +19,30 @@ export async function authenticate(req, res, next) {
   }
 
   try {
+    // Check if token was revoked via Redis blacklist
+    const revoked = await isJwtRevoked(token);
+    if (revoked) {
+      return unauthorized(res, 'Token has been revoked. Please log in again.', {
+        code: 'TOKEN_REVOKED',
+      });
+    }
+
     const decoded = verifyAccessToken(token);
 
-    // Fetch user from DB and check active status
-    const user = await db('users')
-      .where({ id: decoded.sub })
-      .select('id', 'email', 'role', 'phone_number', 'is_mfa_enabled', 'status')
-      .first();
+    // Fast user lookup via Redis cache (60s TTL)
+    const cacheKey = `amrutam:user:${decoded.sub}`;
+    let user = await cacheGet(cacheKey);
+
+    if (!user) {
+      user = await db('users')
+        .where({ id: decoded.sub })
+        .select('id', 'email', 'role', 'phone_number', 'is_mfa_enabled', 'status')
+        .first();
+
+      if (user) {
+        await cacheSet(cacheKey, user, 60); // 1 minute session cache
+      }
+    }
 
     if (!user) {
       return unauthorized(res, 'User account no longer exists.');
@@ -35,6 +53,7 @@ export async function authenticate(req, res, next) {
     }
 
     req.user = user;
+    req.token = token;
     return next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
@@ -70,9 +89,9 @@ export function authorize(...roles) {
 /**
  * Write Idempotency Middleware (PRD Bonus +10 Requirement)
  * Intercepts Idempotency-Key header on mutating requests (POST, PUT, PATCH).
- * Caches response in `idempotency_keys` table to prevent duplicate writes / payments / slot locks.
+ * Checks Redis cache first (< 5ms), falling back to `idempotency_keys` table.
  */
-export function idempotency(req, res, next) {
+export async function idempotency(req, res, next) {
   const key = req.headers['idempotency-key'];
 
   // If no idempotency key is provided, proceed normally
@@ -86,30 +105,50 @@ export function idempotency(req, res, next) {
   }
 
   const userId = req.user ? req.user.id : null;
+  const redisCacheKey = `amrutam:idempotency:${key}`;
 
-  // Check if this idempotency key was previously processed
-  db('idempotency_keys')
-    .where({ key })
-    .andWhere('expires_at', '>', new Date())
-    .first()
-    .then((existingRecord) => {
-      if (existingRecord && existingRecord.response_status) {
-        // Return previously cached response directly
-        res.setHeader('X-Cache-Lookup', 'HIT');
-        res.setHeader('X-Idempotent-Replay', 'true');
-        return res.status(existingRecord.response_status).json(existingRecord.response_body);
-      }
+  try {
+    // 1. Fast Redis check (< 5ms)
+    const cachedResponse = await cacheGet(redisCacheKey);
+    if (cachedResponse && cachedResponse.status) {
+      res.setHeader('X-Cache-Lookup', 'HIT-REDIS');
+      res.setHeader('X-Idempotent-Replay', 'true');
+      return res.status(cachedResponse.status).json(cachedResponse.body);
+    }
 
-      // Intercept res.json to capture response payload
-      const originalJson = res.json.bind(res);
+    // 2. PostgreSQL check
+    const existingRecord = await db('idempotency_keys')
+      .where({ key })
+      .andWhere('expires_at', '>', new Date())
+      .first();
 
-      res.json = function (body) {
-        const statusCode = res.statusCode || 200;
+    if (existingRecord && existingRecord.response_status) {
+      const parsedBody =
+        typeof existingRecord.response_body === 'string'
+          ? JSON.parse(existingRecord.response_body)
+          : existingRecord.response_body;
 
-        // If request succeeded (2xx) and user is available, cache response
-        if (statusCode >= 200 && statusCode < 300 && userId) {
-          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24-hour TTL
+      // Populate Redis for future sub-millisecond lookups
+      await cacheSet(redisCacheKey, { status: existingRecord.response_status, body: parsedBody }, 86400);
 
+      res.setHeader('X-Cache-Lookup', 'HIT-DB');
+      res.setHeader('X-Idempotent-Replay', 'true');
+      return res.status(existingRecord.response_status).json(parsedBody);
+    }
+
+    // 3. Intercept res.json to capture and cache response
+    const originalJson = res.json.bind(res);
+
+    res.json = function (body) {
+      const statusCode = res.statusCode || 200;
+
+      // If request succeeded (2xx), cache in Redis and DB
+      if (statusCode >= 200 && statusCode < 300) {
+        // Cache in Redis (24-hour TTL)
+        cacheSet(redisCacheKey, { status: statusCode, body }, 86400).catch(() => {});
+
+        if (userId) {
+          const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
           db('idempotency_keys')
             .insert({
               key,
@@ -121,19 +160,19 @@ export function idempotency(req, res, next) {
               expires_at: expiresAt,
             })
             .catch((err) => {
-              console.error('[Idempotency] Failed to cache response:', err.message);
+              console.error('[Idempotency] Failed to cache response in DB:', err.message);
             });
         }
+      }
 
-        return originalJson(body);
-      };
+      return originalJson(body);
+    };
 
-      return next();
-    })
-    .catch((err) => {
-      console.error('[Idempotency] Error reading idempotency key:', err);
-      return next();
-    });
+    return next();
+  } catch (err) {
+    console.error('[Idempotency] Error processing idempotency:', err);
+    return next();
+  }
 }
 
 /**

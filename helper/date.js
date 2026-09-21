@@ -29,6 +29,8 @@ export function getCurrentUtcDateTime() {
   return formatUtcDateTime(new Date());
 }
 
+export const getUTCDateTime = getCurrentUtcDateTime;
+
 /**
  * Automatically format all Date instances and recognized timestamp keys
  * in an object/array to UTC 'yyyy-mm-dd hh:mm:ss'
@@ -79,3 +81,6 @@ export function formatDatesInObject(obj) {
 
   return result;
 }
+
+export const formatUtcDate = formatUtcDateTime;
+

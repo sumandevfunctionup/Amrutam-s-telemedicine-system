@@ -1,0 +1,13 @@
+node_modules
+npm-debug.log
+.env
+.env.local
+.git
+.gitignore
+.gemini
+scratch
+docs
+*.md
+!BLUEPRINT.md
+!REDIS_DOCUMENTATION.md
+.DS_Store

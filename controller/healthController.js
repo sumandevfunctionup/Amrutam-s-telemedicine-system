@@ -1,20 +1,29 @@
 import { checkDbConnection } from '../db/db.js';
+import { pingRedis } from '../helper/redis.js';
 import { successResponse, errorResponse } from '../helper/apiResponse.js';
 import { getCurrentUtcDateTime } from '../helper/date.js';
 
 /**
- * Controller to check server and database health
+ * Controller to check server, database, and Redis health
  */
 export async function getHealth(req, res) {
   try {
-    const dbStatus = await checkDbConnection();
+    const [dbStatus, redisStatus] = await Promise.all([
+      checkDbConnection(),
+      pingRedis(),
+    ]);
+
+    const isSystemHealthy =
+      dbStatus.status === 'healthy' &&
+      (redisStatus.status === 'healthy' || redisStatus.status === 'disabled');
 
     const healthData = {
-      status: 'UP',
+      status: isSystemHealthy ? 'UP' : 'DEGRADED',
       timestamp: getCurrentUtcDateTime(),
-      uptime: process.uptime(),
+      uptime: Math.floor(process.uptime()),
       services: {
         database: dbStatus,
+        redis: redisStatus,
       },
     };
 

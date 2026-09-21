@@ -20,6 +20,7 @@ import {
   notFound,
   conflict,
 } from '../helper/apiResponse.js';
+import { revokeJwt, cacheDel } from '../helper/redis.js';
 
 /**
  * Register a new user (patient or doctor)
@@ -422,3 +423,27 @@ export async function updateProfile(req, res, next) {
     next(error);
   }
 }
+
+/**
+ * Logout user: invalidates current access token in Redis blacklist and clears session cache
+ * POST /api/v1/auth/logout
+ */
+export async function logout(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      // Revoke in Redis for 15 minutes (standard access token expiry)
+      await revokeJwt(token, 900);
+    }
+
+    if (req.user?.id) {
+      await cacheDel(`amrutam:user:${req.user.id}`);
+    }
+
+    return ok(res, null, 'Logged out successfully. Token has been revoked.');
+  } catch (error) {
+    next(error);
+  }
+}
+

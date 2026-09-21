@@ -8,6 +8,9 @@ import { db } from './db/db.js';
 import { swaggerSpec } from './helper/swagger.js';
 import router from './router/indexRouter.js';
 import { notFoundHandler, errorHandler } from './auth/middleware.js';
+import { rateLimiter } from './auth/rateLimiter.js';
+import { correlationMiddleware } from './helper/correlation.js';
+import { metricsMiddleware, getMetrics } from './helper/metrics.js';
 
 dotenv.config();
 
@@ -25,17 +28,54 @@ app.use(
 // Cross-origin resource sharing
 app.use(cors());
 
-// HTTP request logging
+// Request Correlation & Tracing
+app.use(correlationMiddleware);
+
+// Prometheus Metrics Middleware
+app.use(metricsMiddleware);
+
+// HTTP request logging with correlation ID
 if (NODE_ENV !== 'test') {
-  app.use(morgan('dev'));
+  morgan.token('correlation-id', (req) => req.correlationId || '-');
+  app.use(morgan('[:date[iso]] :method :url :status :response-time ms - [CorrID: :correlation-id]'));
 }
 
 // Request parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Prometheus Metrics Exporter
+app.get('/metrics', getMetrics);
+
 // Swagger documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, { explorer: true }));
+app.use(
+  '/api-docs',
+  swaggerUi.serve,
+  swaggerUi.setup(swaggerSpec, {
+    explorer: true,
+    customSiteTitle: `Amrutam API Docs v${swaggerSpec.info?.version}`,
+    customCss: `
+      .swagger-ui .info .title small.version-stamp,
+      .swagger-ui .info .title small {
+        background-color: #047857 !important;
+        padding: 3px 10px !important;
+        border-radius: 6px !important;
+        color: #ffffff !important;
+        font-weight: 700 !important;
+        font-size: 14px !important;
+        margin-left: 10px !important;
+        display: inline-block !important;
+      }
+      .swagger-ui .info .title small pre.version {
+        color: #ffffff !important;
+        background: transparent !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      .swagger-ui .topbar { display: none }
+    `,
+  })
+);
 app.get('/api-docs.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
@@ -46,15 +86,16 @@ app.get('/', (req, res) => {
   res.json({
     name: "Amrutam Telemedicine System API",
     status: 'online',
-    version: '1.0.0',
+    version: '2.0.0',
     documentation: '/api-docs',
     health: '/api/v1/health',
     dbTest: '/api/v1/db-test',
+    metrics: '/metrics',
   });
 });
 
-// Mount API router
-app.use('/api/v1', router);
+// Mount API router with global rate limiter (300 req / 60s per client)
+app.use('/api/v1', rateLimiter({ max: 300, windowSeconds: 60, keyPrefix: 'api-global' }), router);
 
 // Catch 404 routes
 app.use(notFoundHandler);
@@ -63,13 +104,21 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Start server
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   console.log(`=========================================`);
   console.log(`Amrutam Telemedicine Server is running`);
   console.log(`Base URL: http://localhost:${PORT}`);
   console.log(`API Docs: http://localhost:${PORT}/api-docs`);
   console.log(`Health:   http://localhost:${PORT}/api/v1/health`);
   console.log(`DB Test:  http://localhost:${PORT}/api/v1/db-test`);
+
+  try {
+    const { pingRedis } = await import('./helper/redis.js');
+    const redisHealth = await pingRedis();
+    console.log(`Redis:    ${redisHealth.status.toUpperCase()} (${redisHealth.latency_ms}ms, ${redisHealth.mode || 'upstash'})`);
+  } catch (err) {
+    console.warn(`Redis:    DISABLED (${err.message})`);
+  }
   console.log(`=========================================`);
 });
 
